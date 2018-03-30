@@ -1,0 +1,10 @@
+[package]
+name = "diskdestroyer"
+version = "0.1.0"
+authors = ["Adam <sector-f@users.noreply.github.com>"]
+
+[dependencies]
+rand = "0.4.2"
+clap = "2.31.2"
+threadpool = "1.7.1"
+num_cpus = "1.8.0"
