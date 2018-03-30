@@ -1,7 +1,7 @@
 extern crate num_cpus;
 
 extern crate rand;
-use rand::{StdRng, Rng};
+use rand::{thread_rng, Rng};
 
 extern crate threadpool;
 use threadpool::ThreadPool;
@@ -12,50 +12,26 @@ use clap::{Arg, App};
 use std::ffi::{OsString, OsStr};
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::{PathBuf, Path};
-use std::process::exit;
+use std::path::PathBuf;
 
 struct DataBuffer {
     data: Vec<u8>,
-    rng: Option<StdRng>,
     data_type: DataType,
 }
 
 impl DataBuffer {
-    fn new(data_type: DataType, len: usize) -> Result<Self, String> {
-        match data_type {
-            DataType::Random => {
-                let rng = match StdRng::new() {
-                    Ok(rng) => rng,
-                    Err(e) => {
-                        return Err(format!("Can't create random number generator: {}", e));
-                    },
-                };
-
-                Ok(
-                    DataBuffer {
-                        data: vec![0; len],
-                        rng: Some(rng),
-                        data_type: data_type,
-                    }
-                )
-            },
-            DataType::Zeroes => {
-                Ok(
-                    DataBuffer {
-                        data: vec![0; len],
-                        rng: None,
-                        data_type: data_type,
-                    }
-                )
-            },
+    fn new(data_type: DataType, len: usize) -> Self {
+        DataBuffer {
+            data: vec![0; len],
+            data_type: data_type,
         }
     }
 
     fn next_bytes(&mut self) -> &[u8] {
         match self.data_type {
             DataType::Random => {
-                self.rng.unwrap().fill_bytes(&mut self.data); // Maybe use gen() instead?
+                let mut rng = thread_rng();
+                rng.fill_bytes(&mut self.data); // Maybe use gen() instead?
                 &self.data
             },
             DataType::Zeroes => {
@@ -65,6 +41,7 @@ impl DataBuffer {
     }
 }
 
+#[derive(Copy, Clone)]
 enum DataType {
     Random,
     Zeroes,
@@ -72,13 +49,9 @@ enum DataType {
 
 fn is_valid_int(s: &OsStr) -> Result<(), OsString> {
     match s.to_string_lossy().parse::<usize>() {
-        Ok(int) => Ok(()),
+        Ok(_) => Ok(()),
         Err(e) => Err(OsString::from(e.to_string())),
     }
-}
-
-fn write_data(path: &Path, data: &[u8]) {
-
 }
 
 fn main() {
@@ -102,6 +75,7 @@ fn main() {
              .help("Specify the number of bytes written at a time (Default: 1024)"))
         .arg(Arg::with_name("files")
              .index(1)
+             .required(true)
              .help("The file(s) to write data to")
              .value_name("FILES")
              .multiple(true))
@@ -126,10 +100,9 @@ fn main() {
 
     let pool = ThreadPool::new(threads);
 
-    let mut buffer: DataBuffer = unimplemented!();
-
     for path in paths {
         pool.execute(move || {
+            let mut buffer: DataBuffer = DataBuffer::new(datatype, bs);
             match OpenOptions::new().write(true).open(&path) {
                 Ok(mut file) => {
                     println!("Starting to write to {}", &path.to_string_lossy());
