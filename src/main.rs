@@ -1,5 +1,8 @@
 extern crate num_cpus;
 
+extern crate indicatif;
+use indicatif::{MultiProgress, ProgressBar, HumanBytes};
+
 extern crate rand;
 use rand::{thread_rng, Rng};
 
@@ -100,15 +103,22 @@ fn main() {
 
     let pool = ThreadPool::new(threads);
 
+    let progress = MultiProgress::new();
+
     for path in paths {
+        let spinner = progress.add(ProgressBar::new_spinner());
         pool.execute(move || {
             let mut buffer: DataBuffer = DataBuffer::new(datatype, bs);
+
             match OpenOptions::new().write(true).open(&path) {
                 Ok(mut file) => {
-                    println!("Starting to write to {}", &path.to_string_lossy());
-                    while let Ok(_bytes) = file.write(buffer.next_bytes()) {
-
+                    let mut written = 0;
+                    while let Ok(bytes) = file.write(buffer.next_bytes()) {
+                        written += bytes;
+                        spinner.set_message(&format!("{}: {}", &path.to_string_lossy(), HumanBytes(written as u64)));
+                        spinner.tick();
                     }
+                    spinner.finish_with_message(&format!("{}: complete", &path.to_string_lossy()));
                 },
                 Err(e) => {
                     eprintln!("Failed to open {}: {}", &path.to_string_lossy(), e);
@@ -117,5 +127,6 @@ fn main() {
         });
     }
 
+    let _ = progress.join();
     pool.join();
 }
